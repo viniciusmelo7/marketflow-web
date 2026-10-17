@@ -1,16 +1,24 @@
 import { useState, type FormEvent } from 'react'
 import axios from 'axios'
 import { AlertCircle, LoaderCircle, LockKeyhole, Mail } from 'lucide-react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { login } from '../services/authService'
 import { getSession, saveSession } from '../services/sessionService'
 
 function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const loginNotice =
+    typeof location.state === 'object' &&
+    location.state !== null &&
+    'notice' in location.state &&
+    typeof location.state.notice === 'string'
+      ? location.state.notice
+      : null
 
   if (getSession()) {
     return <Navigate to="/" replace />
@@ -106,6 +114,15 @@ function LoginPage() {
                 Use seu e-mail e sua senha para acessar a MarketFlow.
               </p>
             </div>
+
+            {loginNotice && (
+              <p
+                className="mb-5 rounded-xl border border-brand-100 bg-brand-50 px-3.5 py-3 text-sm leading-5 text-brand-700"
+                role="status"
+              >
+                {loginNotice}
+              </p>
+            )}
 
             <form className="space-y-5" onSubmit={handleSubmit}>
               <div>

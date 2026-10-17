@@ -9,7 +9,7 @@ import {
   ShoppingCart,
   Trash2,
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import MainLayout from '../layouts/MainLayout'
 import {
   getCart,
@@ -22,7 +22,12 @@ import {
   getPendingOrderId,
   savePendingOrderId,
 } from '../services/pendingOrderService'
+import { clearSession } from '../services/sessionService'
 import type { Cart } from '../types/cart'
+import {
+  CART_SESSION_EXPIRED_NOTICE,
+  isCartAuthenticationError,
+} from '../utils/cartAuthentication'
 
 const priceFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -30,10 +35,7 @@ const priceFormatter = new Intl.NumberFormat('pt-BR', {
 })
 
 function isUnauthorized(error: unknown) {
-  return (
-    axios.isAxiosError(error) &&
-    (error.response?.status === 401 || error.response?.status === 403)
-  )
+  return isCartAuthenticationError(error)
 }
 
 type CartActionError = {
@@ -102,6 +104,7 @@ function getCheckoutErrorMessage(
 }
 
 function CartPage() {
+  const navigate = useNavigate()
   const [cart, setCart] = useState<Cart | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [hasLoadError, setHasLoadError] = useState(false)
@@ -133,8 +136,16 @@ function CartPage() {
         if (!controller.signal.aborted) setCart(result)
       } catch (error) {
         if (!controller.signal.aborted) {
+          if (isUnauthorized(error)) {
+            clearSession()
+            navigate('/login', {
+              replace: true,
+              state: { notice: CART_SESSION_EXPIRED_NOTICE },
+            })
+            return
+          }
           setHasLoadError(true)
-          setRequiresLogin(isUnauthorized(error))
+          setRequiresLogin(false)
         }
       } finally {
         if (!controller.signal.aborted) setIsLoading(false)
@@ -144,7 +155,7 @@ function CartPage() {
     void loadCart()
 
     return () => controller.abort()
-  }, [loadAttempt])
+  }, [loadAttempt, navigate])
 
   async function changeQuantity(itemId: string, quantity: number) {
     if (isUpdating || !Number.isInteger(quantity) || quantity < 1) return
@@ -156,7 +167,15 @@ function CartPage() {
       const updatedCart = await updateCartItem(itemId, { quantity })
       setCart(updatedCart)
     } catch (error) {
-      setActionError(getCartActionError(error))
+      if (isUnauthorized(error)) {
+        clearSession()
+        navigate('/login', {
+          replace: true,
+          state: { notice: CART_SESSION_EXPIRED_NOTICE },
+        })
+      } else {
+        setActionError(getCartActionError(error))
+      }
     } finally {
       setIsUpdating(false)
     }
@@ -172,7 +191,15 @@ function CartPage() {
       const updatedCart = await removeCartItem(itemId)
       setCart(updatedCart)
     } catch (error) {
-      setActionError(getCartActionError(error))
+      if (isUnauthorized(error)) {
+        clearSession()
+        navigate('/login', {
+          replace: true,
+          state: { notice: CART_SESSION_EXPIRED_NOTICE },
+        })
+      } else {
+        setActionError(getCartActionError(error))
+      }
     } finally {
       setIsUpdating(false)
     }
@@ -217,14 +244,20 @@ function CartPage() {
       window.location.assign(payment.checkoutUrl)
     } catch (error) {
       const requiresLogin = isUnauthorized(error)
+      if (requiresLogin) {
+        clearSession()
+        navigate('/login', {
+          replace: true,
+          state: { notice: CART_SESSION_EXPIRED_NOTICE },
+        })
+        return
+      }
       setCheckoutError({
-        message: requiresLogin
-          ? 'Sua sessão pode ter expirado. Entre novamente para continuar.'
-          : error instanceof Error &&
+        message: error instanceof Error &&
               error.message === 'PENDING_ORDER_STORAGE_UNAVAILABLE'
             ? 'Não foi possível preservar o pedido nesta sessão do navegador. Verifique as permissões de armazenamento e tente novamente.'
             : getCheckoutErrorMessage(error, stage),
-        requiresLogin,
+        requiresLogin: false,
       })
     } finally {
       checkoutInProgressRef.current = false

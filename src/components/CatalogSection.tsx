@@ -8,12 +8,19 @@ import {
   ShoppingCart,
   Tag,
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { addCartItem } from '../services/cartService'
 import { getCategories } from '../services/categoryService'
 import { getProducts } from '../services/productService'
+import { clearSession, getSession } from '../services/sessionService'
 import type { Category } from '../types/category'
 import type { Product } from '../types/product'
+import {
+  CART_LOGIN_REQUIRED_NOTICE,
+  CART_SESSION_EXPIRED_NOTICE,
+  isCartAuthenticationError,
+} from '../utils/cartAuthentication'
+import { isValidProductId } from '../utils/productId'
 
 const priceFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -21,19 +28,12 @@ const priceFormatter = new Intl.NumberFormat('pt-BR', {
 })
 
 type AddFeedback = {
-  kind: 'success' | 'error' | 'auth'
+  kind: 'success' | 'error'
   message: string
 }
 
 function getAddErrorFeedback(error: unknown): AddFeedback {
   if (axios.isAxiosError(error)) {
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      return {
-        kind: 'auth',
-        message: 'Entre na sua conta para adicionar produtos ao carrinho.',
-      }
-    }
-
     const responseData: unknown = error.response?.data
     if (typeof responseData === 'string' && responseData.trim()) {
       return { kind: 'error', message: responseData.trim().slice(0, 240) }
@@ -68,6 +68,7 @@ function getAddErrorFeedback(error: unknown): AddFeedback {
 }
 
 function CatalogSection() {
+  const navigate = useNavigate()
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [productsLoading, setProductsLoading] = useState(true)
@@ -93,7 +94,21 @@ function CatalogSection() {
   }, [])
 
   async function handleAddToCart(product: Product) {
-    if (product.stock <= 0 || addingProductIdsRef.current.has(product.id)) return
+    if (
+      !isValidProductId(product.id) ||
+      product.stock <= 0 ||
+      addingProductIdsRef.current.has(product.id)
+    ) {
+      return
+    }
+
+    if (!getSession()) {
+      navigate('/login', {
+        replace: true,
+        state: { notice: CART_LOGIN_REQUIRED_NOTICE },
+      })
+      return
+    }
 
     addingProductIdsRef.current.add(product.id)
     setAddingProductIds(new Set(addingProductIdsRef.current))
@@ -116,10 +131,18 @@ function CatalogSection() {
       }
     } catch (error) {
       if (isMountedRef.current) {
-        setAddFeedback((feedback) => ({
-          ...feedback,
-          [product.id]: getAddErrorFeedback(error),
-        }))
+        if (isCartAuthenticationError(error)) {
+          clearSession()
+          navigate('/login', {
+            replace: true,
+            state: { notice: CART_SESSION_EXPIRED_NOTICE },
+          })
+        } else {
+          setAddFeedback((feedback) => ({
+            ...feedback,
+            [product.id]: getAddErrorFeedback(error),
+          }))
+        }
       }
     } finally {
       addingProductIdsRef.current.delete(product.id)
@@ -260,6 +283,7 @@ function CatalogSection() {
         <ul className="grid gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
           {products.map((product) => {
             const category = categories.find((item) => item.id === product.categoryId)
+            const hasValidProductId = isValidProductId(product.id)
 
             return (
               <li
@@ -304,7 +328,11 @@ function CatalogSection() {
                   <button
                     aria-busy={addingProductIds.has(product.id)}
                     className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
-                    disabled={product.stock <= 0 || addingProductIds.has(product.id)}
+                    disabled={
+                      !hasValidProductId ||
+                      product.stock <= 0 ||
+                      addingProductIds.has(product.id)
+                    }
                     onClick={() => void handleAddToCart(product)}
                     type="button"
                   >
@@ -313,6 +341,8 @@ function CatalogSection() {
                         <LoaderCircle aria-hidden="true" className="animate-spin" size={17} />
                         Adicionando…
                       </>
+                    ) : !hasValidProductId ? (
+                      'Produto indisponível'
                     ) : product.stock <= 0 ? (
                       'Sem estoque'
                     ) : (
@@ -338,15 +368,7 @@ function CatalogSection() {
                         <AlertCircle aria-hidden="true" className="mt-0.5 shrink-0" size={16} />
                       )}
                       <span>
-                        {addFeedback[product.id].message}{' '}
-                        {addFeedback[product.id].kind === 'auth' && (
-                          <Link
-                            className="font-semibold underline underline-offset-2 hover:text-rose-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
-                            to="/login"
-                          >
-                            Entrar
-                          </Link>
-                        )}
+                        {addFeedback[product.id].message}
                       </span>
                     </div>
                   )}

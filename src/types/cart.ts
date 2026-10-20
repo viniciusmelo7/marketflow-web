@@ -2,6 +2,7 @@ export type CartItem = {
   id: string
   productId: string
   productName: string
+  imageUrl?: string | null
   price: number
   quantity: number
   subtotal: number

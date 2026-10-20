@@ -6,21 +6,22 @@ import { login } from '../services/authService'
 import { getSession, saveSession } from '../services/sessionService'
 
 function LoginPage() {
-  const navigate = useNavigate()
   const location = useLocation()
+  const navigate = useNavigate()
+  const navigationState = location.state as
+    | { notice?: unknown; reauthenticate?: unknown }
+    | null
+  const notice =
+    typeof navigationState?.notice === 'string'
+      ? navigationState.notice
+      : null
+  const isReauthentication = navigationState?.reauthenticate === true
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
-  const loginNotice =
-    typeof location.state === 'object' &&
-    location.state !== null &&
-    'notice' in location.state &&
-    typeof location.state.notice === 'string'
-      ? location.state.notice
-      : null
 
-  if (getSession()) {
+  if (getSession() && !isReauthentication) {
     return <Navigate to="/" replace />
   }
 
@@ -115,12 +116,13 @@ function LoginPage() {
               </p>
             </div>
 
-            {loginNotice && (
+            {notice && (
               <p
-                className="mb-5 rounded-xl border border-brand-100 bg-brand-50 px-3.5 py-3 text-sm leading-5 text-brand-700"
+                aria-live="polite"
+                className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm leading-5 text-amber-900"
                 role="status"
               >
-                {loginNotice}
+                {notice}
               </p>
             )}
 

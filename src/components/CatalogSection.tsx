@@ -21,6 +21,8 @@ import {
   isCartAuthenticationError,
 } from '../utils/cartAuthentication'
 import { isValidProductId } from '../utils/productId'
+import { resolveProductImage } from '../utils/productImageResolver'
+import { shouldDisplayProductImage } from '../utils/productImage'
 
 const priceFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -83,6 +85,7 @@ function CatalogSection() {
   const [addFeedback, setAddFeedback] = useState<Record<string, AddFeedback>>(
     {},
   )
+  const [failedProductImages, setFailedProductImages] = useState<Record<string, string>>({})
   const addingProductIdsRef = useRef(new Set<string>())
   const isMountedRef = useRef(true)
 
@@ -197,12 +200,12 @@ function CatalogSection() {
   }, [categoriesAttempt])
 
   return (
-    <section aria-labelledby="catalog-title" className="scroll-mt-8 py-8 sm:py-10">
+    <section aria-labelledby="catalog-title" className="min-w-0 scroll-mt-8 py-9 sm:py-12">
       <div className="mb-7 sm:mb-8">
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-700">Vitrine MarketFlow</p>
         <h2
           id="catalog-title"
-          className="mt-2 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl"
+          className="mt-2 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl"
         >
           Produtos
         </h2>
@@ -211,7 +214,7 @@ function CatalogSection() {
         </p>
       </div>
 
-      <div className="mb-7 rounded-2xl border border-slate-200/80 bg-white p-4 sm:mb-8 sm:p-5">
+      <div className="mb-7 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-[0_8px_28px_-26px_rgba(16,42,67,0.45)] sm:mb-8 sm:p-5">
         <div className="mb-3 flex items-center gap-2">
           <Tag aria-hidden="true" className="text-brand-600" size={17} />
           <h3 className="text-sm font-semibold text-slate-800">Categorias</h3>
@@ -236,7 +239,7 @@ function CatalogSection() {
           <ul className="flex flex-wrap gap-2" aria-label="Categorias disponíveis">
             {categories.map((category) => (
               <li
-                className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-sm font-medium text-slate-600"
+                className="rounded-xl border border-brand-100 bg-brand-50/70 px-3 py-2 text-sm font-medium text-brand-700"
                 key={category.id}
               >
                 {category.name}
@@ -280,54 +283,72 @@ function CatalogSection() {
           <p className="mt-1 text-sm text-slate-500">Volte em breve para conferir as novidades.</p>
         </div>
       ) : (
-        <ul className="grid gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
+        <ul className="grid min-w-0 w-full items-stretch gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
           {products.map((product) => {
             const category = categories.find((item) => item.id === product.categoryId)
             const hasValidProductId = isValidProductId(product.id)
-
+            const { url: displayImageUrl } = resolveProductImage(product.imageUrl)
+            const showProductImage = shouldDisplayProductImage(
+              displayImageUrl,
+              failedProductImages[product.id],
+            )
             return (
               <li
-                className="flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_2px_12px_-8px_rgba(16,42,67,0.28)] transition-shadow hover:shadow-[0_8px_24px_-16px_rgba(16,42,67,0.35)]"
+                className="group flex h-full min-w-0 flex-col overflow-hidden rounded-3xl border border-slate-200/90 bg-white shadow-[0_3px_16px_-12px_rgba(16,42,67,0.3)] transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-brand-100 hover:shadow-[0_14px_30px_-20px_rgba(16,42,67,0.42)]"
                 key={product.id}
               >
-                <div
-                  aria-hidden="true"
-                  className="grid h-40 place-items-center border-b border-slate-100 bg-gradient-to-br from-slate-50 to-blue-50/70 text-slate-300 sm:h-44"
-                >
-                  <div className="grid size-16 place-items-center rounded-2xl border border-white bg-white/80 shadow-sm">
-                    <PackageOpen size={30} strokeWidth={1.5} />
-                  </div>
-                </div>
-                <div className="flex flex-1 flex-col p-5 sm:p-6">
-                  {category && (
-                    <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-brand-700">
-                      {category.name}
-                    </p>
+                <div className="flex aspect-[4/3] w-full shrink-0 items-center justify-center overflow-hidden border-b border-slate-100 bg-gradient-to-br from-slate-50 via-white to-brand-50/60 p-4 text-slate-300 sm:p-5">
+                  {showProductImage && displayImageUrl ? (
+                    <img
+                      alt={product.name}
+                      className="block h-full w-full object-contain object-center"
+                      decoding="async"
+                      loading="lazy"
+                      onError={() => {
+                        setFailedProductImages((failedImages) => {
+                          if (failedImages[product.id] === displayImageUrl) return failedImages
+                          return { ...failedImages, [product.id]: displayImageUrl }
+                        })
+                      }}
+                      src={displayImageUrl}
+                    />
+                  ) : (
+                    <div aria-hidden="true" className="grid size-14 place-items-center rounded-2xl border border-white bg-white/80 shadow-sm sm:size-16">
+                      <PackageOpen size={28} strokeWidth={1.5} />
+                    </div>
                   )}
-                  <h3 className="text-base font-semibold leading-6 text-slate-900 sm:text-lg">
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col p-4 sm:p-5">
+                  <div className="flex min-h-7 items-start">
+                    {category && (
+                      <p className="inline-flex max-w-full truncate rounded-full border border-brand-100 bg-brand-50 px-2.5 py-1 text-[11px] font-bold tracking-wide text-brand-700">
+                        {category.name}
+                      </p>
+                    )}
+                  </div>
+                  <h3 className="mt-3 line-clamp-2 min-h-12 break-words text-base font-semibold leading-6 tracking-tight text-slate-900 transition-colors group-hover:text-brand-900 sm:text-lg">
                     {product.name}
                   </h3>
-                  {product.description && (
-                    <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">
-                      {product.description}
-                    </p>
-                  )}
-                  <div className="mt-auto flex items-end justify-between gap-3 border-t border-slate-100 pt-4">
+                  <p className="mt-2 line-clamp-3 min-h-[4.5rem] break-words text-sm leading-6 text-slate-600">
+                    {product.description}
+                  </p>
+                  <div className="mt-auto pt-5">
+                    <div className="flex min-h-[4.5rem] flex-wrap items-end justify-between gap-x-3 gap-y-2 border-t border-slate-100 pt-4">
                     <p className="font-bold tracking-tight text-slate-950">
-                      <span className="mb-0.5 block text-xs font-medium tracking-normal text-slate-500">
+                      <span className="mb-0.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
                         Preço
                       </span>
-                      <span className="text-xl sm:text-2xl">
+                      <span className="text-xl tabular-nums sm:text-2xl">
                         {priceFormatter.format(product.price)}
                       </span>
                     </p>
-                    <p className="pb-1 text-xs font-medium text-slate-500">
+                    <p aria-label={`Estoque disponível: ${product.stock} unidades`} className="mb-0.5 rounded-full bg-slate-50 px-2.5 py-1.5 text-xs font-medium tabular-nums text-slate-600 ring-1 ring-inset ring-slate-200/80">
                       Estoque: {product.stock}
                     </p>
-                  </div>
+                    </div>
                   <button
                     aria-busy={addingProductIds.has(product.id)}
-                    className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
+                    className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-sm font-semibold text-brand-700 transition-[background-color,border-color,color,box-shadow] hover:border-brand-600 hover:bg-brand-600 hover:text-white hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-600 disabled:shadow-none"
                     disabled={
                       !hasValidProductId ||
                       product.stock <= 0 ||
@@ -351,27 +372,28 @@ function CatalogSection() {
                         Adicionar ao carrinho
                       </>
                     )}
-                  </button>
-                  {addFeedback[product.id] && (
-                    <div
-                      aria-live={addFeedback[product.id].kind === 'success' ? 'polite' : undefined}
-                      className={`mt-3 flex items-start gap-2 text-sm leading-5 ${
-                        addFeedback[product.id].kind === 'success'
-                          ? 'text-emerald-700'
-                          : 'text-rose-700'
-                      }`}
-                      role={addFeedback[product.id].kind === 'success' ? 'status' : 'alert'}
-                    >
-                      {addFeedback[product.id].kind === 'success' ? (
-                        <CheckCircle2 aria-hidden="true" className="mt-0.5 shrink-0" size={16} />
-                      ) : (
-                        <AlertCircle aria-hidden="true" className="mt-0.5 shrink-0" size={16} />
+                    </button>
+                    <div className="mt-3 min-h-10">
+                      {addFeedback[product.id] && (
+                        <div
+                          aria-live={addFeedback[product.id].kind === 'success' ? 'polite' : undefined}
+                          className={`flex items-start gap-2 text-sm leading-5 ${
+                            addFeedback[product.id].kind === 'success'
+                              ? 'text-emerald-700'
+                              : 'text-rose-700'
+                          }`}
+                          role={addFeedback[product.id].kind === 'success' ? 'status' : 'alert'}
+                        >
+                          {addFeedback[product.id].kind === 'success' ? (
+                            <CheckCircle2 aria-hidden="true" className="mt-0.5 shrink-0" size={16} />
+                          ) : (
+                            <AlertCircle aria-hidden="true" className="mt-0.5 shrink-0" size={16} />
+                          )}
+                          <span>{addFeedback[product.id].message}</span>
+                        </div>
                       )}
-                      <span>
-                        {addFeedback[product.id].message}
-                      </span>
                     </div>
-                  )}
+                  </div>
                 </div>
               </li>
             )

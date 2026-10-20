@@ -1,39 +1,54 @@
 import { ShoppingCart } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
+
+const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+  `relative inline-flex min-h-11 items-center justify-center rounded-full px-2 text-xs font-semibold transition-colors after:absolute after:inset-x-2 after:bottom-1 after:h-0.5 after:rounded-full after:transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:px-3 sm:text-sm ${
+    isActive
+      ? 'text-brand-700 after:bg-brand-600'
+      : 'text-slate-600 after:bg-transparent hover:text-brand-700'
+  }`
 
 function SiteHeader() {
   return (
-    <header className="border-b border-slate-200/80 bg-white shadow-[0_4px_20px_-16px_rgba(16,42,67,0.45)]">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-8">
+    <header className="border-b border-slate-200/80 bg-white">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-3 sm:gap-6 sm:px-8 sm:py-4">
         <Link
-          className="shrink-0 text-lg font-bold tracking-tight text-slate-950 transition-colors hover:text-brand-700 focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-600 sm:text-xl"
+          className="inline-flex shrink-0 items-center rounded-full text-slate-950 transition-colors hover:text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-600"
           to="/"
           aria-label="MarketFlow, página inicial"
         >
-          Market<span className="text-brand-600">Flow</span>
+          <span className="text-lg font-extrabold tracking-[-0.045em] sm:text-xl">
+            Market<span className="text-brand-600">Flow</span>
+          </span>
         </Link>
 
-        <nav aria-label="Navegação principal" className="flex items-center gap-1 sm:gap-5">
-          <Link
-            className="rounded-lg px-2 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 hover:text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:px-3 sm:text-sm"
-            to="/"
-          >
+        <nav
+          aria-label="Navegação principal"
+          className="flex shrink-0 items-center gap-0.5 sm:gap-2"
+        >
+          <NavLink className={navLinkClass} end to="/">
             Início
-          </Link>
+          </NavLink>
           <a
-            className="rounded-lg px-2 py-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 hover:text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:px-3 sm:text-sm"
+            className="inline-flex min-h-11 items-center justify-center rounded-full px-2 text-xs font-semibold text-slate-600 transition-colors hover:text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:px-3 sm:text-sm"
             href="#proposta"
           >
             Sobre
           </a>
-          <Link
+          <NavLink
             aria-label="Carrinho de compras"
-            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-brand-100 bg-brand-50 px-2.5 py-2 text-xs font-semibold text-brand-700 transition-colors hover:border-brand-600 hover:bg-brand-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:px-3 sm:text-sm"
+            className={({ isActive }) =>
+              `relative inline-flex size-11 shrink-0 items-center justify-center rounded-full text-slate-600 transition-colors after:absolute after:inset-x-3 after:bottom-1 after:h-0.5 after:rounded-full after:transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 hover:text-brand-700 sm:h-11 sm:w-auto sm:gap-2 sm:px-3 ${
+                isActive
+                  ? 'text-brand-700 after:bg-brand-600'
+                  : 'after:bg-transparent'
+              }`
+            }
             to="/cart"
           >
             <ShoppingCart aria-hidden="true" size={18} />
-            <span className="hidden sm:inline">Carrinho</span>
-          </Link>
+            <span className="hidden text-sm font-semibold sm:inline">Carrinho</span>
+          </NavLink>
         </nav>
       </div>
     </header>

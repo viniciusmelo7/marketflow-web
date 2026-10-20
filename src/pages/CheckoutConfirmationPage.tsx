@@ -10,11 +10,16 @@ import { Link } from 'react-router-dom'
 import MainLayout from '../layouts/MainLayout'
 import { getOrderById } from '../services/orderService'
 import {
+  adoptLegacyPendingOrder,
   clearPendingOrderId,
-  getPendingOrderId,
+  getPendingOrderIntent,
 } from '../services/pendingOrderService'
+import { getSession } from '../services/sessionService'
 import type { OrderResponse } from '../types/order'
-import { getOrderConfirmationOutcome } from '../utils/orderConfirmation'
+import {
+  getOrderConfirmationOutcome,
+  shouldClearPendingOrderId,
+} from '../utils/orderConfirmation'
 
 const POLL_INTERVAL_MS = 3000
 const MAX_POLL_DURATION_MS = 60_000
@@ -35,26 +40,30 @@ type VerificationState =
 
 function getQueryErrorMessage(error: unknown): string {
   if (!axios.isAxiosError(error)) {
-    return 'NÃ£o foi possÃ­vel consultar o pedido. Tente novamente.'
+    return 'Não foi possível consultar o pedido. Tente novamente.'
   }
 
   if (error.response?.status === 401 || error.response?.status === 403) {
-    return 'Sua sessÃ£o pode ter expirado. Entre novamente para consultar o pedido.'
+    return 'Sua sessão pode ter expirado. Entre novamente para consultar o pedido.'
   }
 
   if (!error.response) {
-    return 'NÃ£o foi possÃ­vel conectar ao serviÃ§o de pedidos. Verifique sua conexÃ£o e tente novamente.'
+    return 'Não foi possível conectar ao serviço de pedidos. Verifique sua conexão e tente novamente.'
   }
 
   if (error.response.status >= 500) {
-    return 'O serviÃ§o de pedidos estÃ¡ temporariamente indisponÃ­vel. Tente consultar novamente.'
+    return 'O serviço de pedidos está temporariamente indisponível. Tente consultar novamente.'
   }
 
-  return `NÃ£o foi possÃ­vel consultar o pedido (HTTP ${error.response.status}). Tente novamente.`
+  return `Não foi possível consultar o pedido (HTTP ${error.response.status}). Tente novamente.`
 }
 
 function CheckoutConfirmationPage() {
-  const [orderId] = useState(() => getPendingOrderId())
+  const [confirmationUserId] = useState(() => getSession()?.id ?? null)
+  const [orderIntent] = useState(() =>
+    getPendingOrderIntent(confirmationUserId),
+  )
+  const orderId = orderIntent?.orderId ?? null
   const [retryAttempt, setRetryAttempt] = useState(0)
   const [verificationState, setVerificationState] =
     useState<VerificationState>(() => (orderId ? 'loading' : 'unavailable'))
@@ -100,6 +109,29 @@ function CheckoutConfirmationPage() {
       try {
         const result = await getOrderById(currentOrderId, controller.signal)
         if (isDisposed) return
+        if (!confirmationUserId || getSession()?.id !== confirmationUserId) {
+          stopPolling()
+          setRequiresLogin(true)
+          setQueryErrorMessage(
+            'Entre novamente na conta que iniciou esta compra para consultar o pedido.',
+          )
+          setVerificationState('unavailable')
+          return
+        }
+
+        if (orderIntent?.legacy && confirmationUserId) {
+          const adoptedIntent = adoptLegacyPendingOrder(
+            confirmationUserId,
+            currentOrderId,
+          )
+          if (!adoptedIntent) {
+            setUnavailable()
+            setQueryErrorMessage(
+              'Não foi possível preservar o pedido para esta conta. Tente consultar novamente antes de continuar.',
+            )
+            return
+          }
+        }
 
         setOrder(result)
         setRequiresLogin(false)
@@ -108,7 +140,9 @@ function CheckoutConfirmationPage() {
         const outcome = getOrderConfirmationOutcome(result)
         if (outcome !== 'pending') {
           stopPolling()
-          if (outcome === 'confirmed') clearPendingOrderId()
+          if (shouldClearPendingOrderId(outcome)) {
+            clearPendingOrderId(confirmationUserId, currentOrderId)
+          }
           setVerificationState(outcome)
           return
         }
@@ -142,7 +176,7 @@ function CheckoutConfirmationPage() {
       if (retryTimer !== undefined) window.clearTimeout(retryTimer)
       controller.abort()
     }
-  }, [orderId, retryAttempt])
+  }, [orderId, retryAttempt, confirmationUserId, orderIntent?.legacy])
 
   function retryOrderQuery() {
     setOrder(null)

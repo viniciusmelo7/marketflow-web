@@ -8,6 +8,16 @@ export type OrderConfirmationOutcome =
   | 'pending'
   | 'unknown'
 
+export function shouldClearPendingOrderId(
+  outcome: OrderConfirmationOutcome,
+): boolean {
+  return (
+    outcome === 'confirmed' ||
+    outcome === 'payment-failed' ||
+    outcome === 'cancelled'
+  )
+}
+
 export function getOrderConfirmationOutcome(
   order: OrderResponse,
 ): OrderConfirmationOutcome {

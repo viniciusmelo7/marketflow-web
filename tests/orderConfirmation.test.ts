@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { OrderResponse } from '../src/types/order.ts'
-import { getOrderConfirmationOutcome } from '../src/utils/orderConfirmation.ts'
+import {
+  getOrderConfirmationOutcome,
+  shouldClearPendingOrderId,
+} from '../src/utils/orderConfirmation.ts'
 
 function createOrder(overrides: Partial<OrderResponse> = {}): OrderResponse {
   return {
@@ -70,4 +73,34 @@ test('unrecognized runtime status is neutral', () => {
   const order = createOrder({ status: 'REFUNDED' as OrderResponse['status'] })
 
   assert.equal(getOrderConfirmationOutcome(order), 'unknown')
+})
+
+test('pending order ID is cleared for terminal outcomes only', () => {
+  assert.equal(shouldClearPendingOrderId('confirmed'), true)
+  assert.equal(shouldClearPendingOrderId('payment-failed'), true)
+  assert.equal(shouldClearPendingOrderId('cancelled'), true)
+  assert.equal(shouldClearPendingOrderId('pending'), false)
+  assert.equal(shouldClearPendingOrderId('review'), false)
+  assert.equal(shouldClearPendingOrderId('unknown'), false)
+})
+
+test('pending order ID is retained when terminal status requires review', () => {
+  const paidOrderUnderReview = createOrder({
+    status: 'PAID',
+    inventoryStatus: 'DEDUCTED',
+    paymentReviewRequired: true,
+  })
+  const cancelledOrderUnderReview = createOrder({
+    status: 'CANCELLED',
+    inventoryStatus: 'REVIEW_REQUIRED',
+  })
+
+  assert.equal(
+    shouldClearPendingOrderId(getOrderConfirmationOutcome(paidOrderUnderReview)),
+    false,
+  )
+  assert.equal(
+    shouldClearPendingOrderId(getOrderConfirmationOutcome(cancelledOrderUnderReview)),
+    false,
+  )
 })
